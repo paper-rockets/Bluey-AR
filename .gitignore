@@ -1,0 +1,30 @@
+# Only the Crew app ships: Crew/ (code, 4 models, bird gif), Music/ (mp3s) and
+# remote_server.py. Everything below is local-only — asset dumps and pipelines
+# running to several GB, well past what git should carry.
+#
+# NOTE: every pattern is root-anchored with a leading slash. A bare `models/`
+# would also match Crew/models/ and quietly ship the app without its GLBs.
+/KimiPipeline/
+/AUDIO/
+/Triage 1/
+/models/
+/Mirror/
+/RigStation/
+/RigAudit/
+/MultiViewer/
+/ContactSheet/
+/Scripts/
+/Docs/
+/bingo_viewer.html
+
+# Environments and build output
+venv/
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini

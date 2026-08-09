@@ -1,0 +1,19 @@
+{
+  "name": "bluey",
+  "version": "1.0.0",
+  "description": "Browser toys built on a procedural rig engine (`rig_engine.js`) driven by MediaPipe pose tracking. Three.js for rendering, no build step — plain ES modules loaded straight from the HTML.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor/android": "^5.7.8",
+    "@capacitor/core": "^5.7.8"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^5.7.8"
+  }
+}

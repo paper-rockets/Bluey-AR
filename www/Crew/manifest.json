@@ -1,0 +1,21 @@
+{
+  "name": "Bluey 3D Crew",
+  "short_name": "Bluey Crew",
+  "start_url": "./toon_crew.html",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "description": "A 3D character motion tracking app for Bluey and Bingo.",
+  "icons": [
+    {
+      "src": "https://upload.wikimedia.org/wikipedia/en/3/36/Bluey_title_card.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://upload.wikimedia.org/wikipedia/en/3/36/Bluey_title_card.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
