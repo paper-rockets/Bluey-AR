@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bluey-v3-cache';
+const CACHE_NAME = 'bluey-v3-cache-2';
 const urlsToCache = [
   './toon_crew.html'
 ];
