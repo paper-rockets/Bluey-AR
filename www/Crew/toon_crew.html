@@ -924,6 +924,7 @@ async function boot() {
     const msg = document.getElementById('loadMsg');
     let done = 0;
 
+    const MODEL_DIR = 'models/';
     const gltfs = await Promise.all(CAST.map(cfg =>
         loader.loadAsync(MODEL_DIR + encodeURIComponent(cfg.file)).then(g => {
             done++; loadFill.style.width = `${done / CAST.length * 100}%`;
