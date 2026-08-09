@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Crew — MediaPipe Motion Demo</title>
+<link rel="manifest" href="manifest.json">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:#000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;touch-action:none;user-select:none;color:#fff}
+canvas#three{position:fixed;inset:0;width:100%!important;height:100%!important}
+
+video#cam{position:fixed;bottom:14px;right:14px;width:150px;height:112px;border-radius:12px;border:1px solid rgba(255,255,255,.18);object-fit:cover;transform:scaleX(-1);z-index:20;opacity:.8}
+@media(max-width:700px){video#cam{width:96px;height:72px;bottom:10px;right:10px}}
+
+#viewBar{position:fixed;top:0;left:0;right:0;display:flex;justify-content:center;gap:8px;padding:14px 12px;z-index:20}
+.view-btn{padding:9px 22px;border-radius:22px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);backdrop-filter:blur(10px);color:#cfd4dd;font-size:13px;font-weight:600;letter-spacing:.02em;cursor:pointer;transition:all .22s}
+.view-btn:hover{background:rgba(255,255,255,.12)}
+.view-btn.active{background:rgba(255,255,255,.92);border-color:#fff;color:#000}
+.view-btn:active{transform:scale(.95)}
+
+#roster{position:fixed;bottom:14px;left:14px;z-index:20;display:flex;flex-direction:column;gap:5px;font-size:12px}
+.row{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.05);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.09);border-radius:9px;padding:6px 12px;transition:opacity .25s}
+.row.off{opacity:.22}
+.row .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.row .nm{width:96px;font-weight:600;color:#e6e9ef}
+.row .mv{color:#7f8794;font-variant:small-caps;letter-spacing:.05em;min-width:74px}
+.row .mv.react{color:#ffd166}
+@media(max-width:700px){#roster{font-size:10px;bottom:92px}.row .nm{width:72px}}
+
+#music{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:20;display:none;align-items:center;gap:10px;background:rgba(255,255,255,.05);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:8px 14px;max-width:min(560px,92vw)}
+#music.on{display:flex}
+#music button{width:30px;height:30px;flex-shrink:0;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);color:#e6e9ef;font-size:12px;line-height:1;cursor:pointer;transition:background .2s}
+#music button:hover{background:rgba(255,255,255,.16)}
+#music button:active{transform:scale(.92)}
+#mPlay{background:rgba(255,255,255,.9);color:#000;border-color:#fff}
+#mTitle{font-size:12px;color:#c3c9d4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+#mVol{width:70px;flex-shrink:0;accent-color:#fff}
+#beat{width:4px;height:22px;flex-shrink:0;border-radius:2px;background:#46c46a;transform-origin:center;opacity:.85}
+@media(max-width:700px){#music{padding:6px 10px;gap:7px;max-width:94vw}#mVol{width:44px}#mTitle{font-size:10px}}
+
+#hud{position:fixed;bottom:62px;left:50%;transform:translateX(-50%);z-index:20;display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.05);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.09);border-radius:10px;padding:8px 16px;font-size:12px;color:#98a0ad;white-space:nowrap}
+#hud .dot{width:8px;height:8px;border-radius:50%;background:#e5484d}
+#hud .dot.on{background:#46c46a}
+#bar{width:84px;height:5px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden}
+#barFill{height:100%;width:0;background:linear-gradient(90deg,#46c46a,#ffd166,#ff6bd6);transition:width .1s linear}
+@media(max-width:700px){#hud{font-size:10px;padding:6px 11px;gap:8px;bottom:auto;top:60px}#bar{width:52px}}
+@media(max-width:700px){#roster{bottom:64px}}
+
+#notes{position:fixed;inset:0;z-index:11;pointer-events:none;overflow:hidden}
+.note{position:absolute;opacity:0;will-change:transform,opacity;animation:noteRise var(--dur) linear forwards;text-shadow:0 0 14px currentColor}
+@keyframes noteRise{
+  0%{opacity:0;transform:translateY(0) rotate(0deg) scale(.55)}
+  14%{opacity:.9}
+  100%{opacity:0;transform:translateY(-46vh) rotate(var(--spin)) scale(1.1)}
+}
+#bird{position:fixed;left:0;top:0;width:122px;z-index:12;display:none;pointer-events:none;will-change:transform;filter:drop-shadow(0 10px 24px rgba(0,0,0,.65))}
+@media(max-width:700px){#bird{width:82px}}
+
+#remoteInfo{position:fixed;top:14px;right:14px;z-index:20;font-size:11px;line-height:1.6;text-align:right;color:#5f6672;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:6px 11px;opacity:0;transition:opacity .3s,border-color .3s;user-select:text}
+#remoteInfo.on{opacity:1}
+#remoteInfo b{color:#aeb6c2;font-weight:600;letter-spacing:.04em}
+#remoteInfo.live{border-color:rgba(70,196,106,.45)}
+@media(max-width:700px){#remoteInfo{display:none}}
+
+#gesture{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.8);font-size:clamp(38px,9vw,86px);font-weight:800;letter-spacing:.06em;color:#fff;text-shadow:0 0 40px rgba(255,255,255,.35);z-index:15;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s}
+#gesture.show{opacity:.92;transform:translate(-50%,-50%) scale(1)}
+
+#loading{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#000;z-index:100;gap:14px}
+#loading .t{font-size:20px;font-weight:700;letter-spacing:.04em}
+#loading .sub{font-size:13px;color:#6b727e}
+#loading .track{width:220px;height:3px;background:rgba(255,255,255,.12);border-radius:2px;overflow:hidden}
+#loading .fill{height:100%;width:0;background:#fff;transition:width .3s}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="t">CREW</div>
+  <div class="track"><div class="fill" id="loadFill"></div></div>
+  <div class="sub" id="loadMsg">Loading characters…</div>
+</div>
+
+<canvas id="three"></canvas>
+<video id="cam" autoplay playsinline muted style="display: none;"></video>
+
+<div id="viewBar" style="display: none;">
+  <button class="view-btn active" data-view="all">All</button>
+</div>
+
+<div id="music">
+  <button id="mPrev" title="Previous track">&#9664;&#9664;</button>
+  <button id="mPlay" title="Play / pause">&#9654;</button>
+  <button id="mNext" title="Next track">&#9654;&#9654;</button>
+  <div id="beat"></div>
+  <span id="mTitle">—</span>
+  <input id="mVol" type="range" min="0" max="1" step="0.01" value="0.65" title="Volume">
+</div>
+<audio id="audio" preload="none" crossorigin="anonymous"></audio>
+
+<div id="roster"></div>
+<div id="hud"><span class="dot" id="hudDot"></span><span id="hudTxt">starting…</span><div id="bar"><div id="barFill"></div></div></div>
+<div id="notes"></div>
+<img id="bird" src="assets/ChatDancce.gif" alt="">
+<div id="gesture"></div>
+<div id="remoteInfo"></div>
+
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+}}
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').then(registration => {
+      console.log('ServiceWorker registration successful with scope: ', registration.scope);
+    }, err => {
+      console.log('ServiceWorker registration failed: ', err);
+    });
+  });
+}
+
+window.onerror = function(msg, url, lineNo, columnNo, error) {
+    document.getElementById('loadMsg').textContent = 'Global Error: ' + msg + ' at line ' + lineNo;
+};
+window.onunhandledrejection = function(event) {
+    document.getElementById('loadMsg').textContent = 'Promise Error: ' + (event.reason ? (event.reason.message || event.reason) : 'Unknown');
+};
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RigCharacter, CLIPS } from './rig_engine.js';
+import { applyCalibration } from './apply_calibration.js';
+import { openChannel } from './relay.js';
+
+// ═══════════════════════════════════════════════════════════════════════
+// extra reaction clips (not in the engine's built-in set)
+// ═══════════════════════════════════════════════════════════════════════
+CLIPS.excited = function (rig, t, { intensity = 1 } = {}) {
+    const s = rig.semantic, bounce = Math.abs(Math.sin(t * 8)) * intensity;
+    rig._driveHips(bounce * 0.03, 0, 0);
+    if (s.spine[0]) rig.pose(s.spine[0], -bounce * 0.08, 0, 0);
+    rig.pose(s.head, -0.1 + bounce * 0.05, Math.sin(t * 4) * 0.1, 0);
+    rig.pose(s.upperArmL, -0.3, 0, -0.3 + Math.sin(t * 6) * 0.4);
+    rig.pose(s.upperArmR, -0.3, 0, 0.3 - Math.sin(t * 6) * 0.4);
+    rig.poseLocal(s.forearmL, 1.0 + bounce * 0.3, 0, 0);
+    rig.poseLocal(s.forearmR, 1.0 + bounce * 0.3, 0, 0);
+    rig.collision?.suppress(0.2);
+    rig.morph('Mouth Smile', 1.0); rig.viseme('A', bounce * 0.5);
+    rig.morph('BrowHappy', 0.9); rig.blink(0);
+    rig.pose(s.thighL, -bounce * 0.15, 0, 0); rig.pose(s.thighR, -bounce * 0.15, 0, 0);
+    rig._poseMapped(s.shinL, rig.legAxes?.kneeL, bounce * 0.3 + 0.1);
+    rig._poseMapped(s.shinR, rig.legAxes?.kneeR, bounce * 0.3 + 0.1);
+    s.tail.forEach((n, i) => rig.pose(n, 0, Math.sin(t * 10 - i * 0.3) * 0.2, 0));
+};
+CLIPS.laugh = function (rig, t, { intensity = 1 } = {}) {
+    const s = rig.semantic, shake = Math.sin(t * 12) * 0.04 * intensity;
+    if (s.spine[0]) rig.pose(s.spine[0], -0.15 * intensity + shake, 0, 0);
+    rig.pose(s.head, -0.2 * intensity + shake * 1.5, 0, Math.sin(t * 6) * 0.05);
+    const ad = rig.armDownAuto ?? 1.4;
+    rig.pose(s.upperArmL, shake * 2, 0, -ad);
+    rig.pose(s.upperArmR, shake * 2, 0, ad);
+    rig.poseLocal(s.forearmL, 0.5 + Math.abs(shake) * 3, 0, 0);
+    rig.poseLocal(s.forearmR, 0.5 + Math.abs(shake) * 3, 0, 0);
+    rig.morph('Mouth Smile', 0.9); rig.viseme('A', 0.4 + Math.sin(t * 8) * 0.3);
+    rig.blink(0.3 + Math.sin(t * 10) * 0.1); rig.morph('BrowHappy', 0.8);
+    rig._driveHips(-0.01 * intensity + shake * 0.5, 0, 0);
+    s.tail.forEach((n, i) => rig.pose(n, 0, Math.sin(t * 8 - i * 0.5) * 0.15, 0));
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// config
+// ═══════════════════════════════════════════════════════════════════════
+const CAST = [
+    { key: 'bluey',  file: 'Bluey_fixed_1.glb',       name: 'Bluey',       color: '#4aa3ff' },
+    { key: 'bingo',  file: 'Bingo_fixed_1.glb',       name: 'Bingo',       color: '#ff8a4a' },
+];
+const VIEWS = {
+    all:    ['bluey', 'bingo'],
+    bluey:  ['bluey', 'bingo'],
+};
+
+// Idle dance pool — every character holds a different one at any moment.
+const DANCES = ['dance', 'floss', 'stomp', 'wiggle', 'silly', 'groove', 'twist', 'sway', 'hop', 'celebrate'];
+// Reaction pools, keyed by what the user is doing.
+const REACT = {
+    wave:  ['wave', 'wave', 'celebrate', 'excited', 'hop', 'laugh'],
+    cheer: ['celebrate', 'excited', 'jump', 'hop', 'silly', 'laugh'],
+    dance: ['dance', 'floss', 'stomp', 'wiggle', 'silly', 'groove', 'twist', 'sway', 'hop'],
+};
+const BPM_CLIPS = new Set(['dance', 'floss', 'stomp', 'wiggle', 'silly', 'groove', 'twist', 'sway', 'hop', 'celebrate']);
+const ARM_CLIPS = new Set([...BPM_CLIPS, 'wave', 'jump', 'idle']);
+const SPACING = 2.7;
+
+const rand  = (a, b) => a + Math.random() * (b - a);
+const pick  = (arr) => arr[(Math.random() * arr.length) | 0];
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+// ═══════════════════════════════════════════════════════════════════════
+// three.js scene — black, no ground
+// ═══════════════════════════════════════════════════════════════════════
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('three'), antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+
+const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+camera.position.set(0, 1.6, 9.5);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1.15, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 2.5;
+controls.maxDistance = 40;   // tall/narrow viewports need real distance to fit 4
+controls.minPolarAngle = 0.25;
+controls.maxPolarAngle = Math.PI / 2.02;
+controls.update();
+
+scene.add(new THREE.HemisphereLight(0x9fb4ff, 0x0a0a12, 0.55));
+const key = new THREE.DirectionalLight(0xfff6ec, 1.55); key.position.set(3.5, 6, 6);   scene.add(key);
+const fill = new THREE.DirectionalLight(0x9ecbff, 0.55); fill.position.set(-5, 2.5, 4); scene.add(fill);
+const rimA = new THREE.DirectionalLight(0xff5fc8, 0.85); rimA.position.set(-4, 3.5, -5); scene.add(rimA);
+const rimB = new THREE.DirectionalLight(0x5fe8ff, 0.75); rimB.position.set(4.5, 2.5, -5); scene.add(rimB);
+
+// Driven from the render loop as well as the resize event: if the page boots
+// in a hidden/zero-size tab, innerWidth is 0 and the canvas would otherwise
+// stay 0x0 (blank) until the window happened to be resized.
+let sizeW = 0, sizeH = 0;
+function resize(force = false) {
+    const w = innerWidth, h = innerHeight;
+    if (!w || !h) return;
+    if (!force && w === sizeW && h === sizeH) return;
+    sizeW = w; sizeH = h;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    frameCamera(true);
+}
+addEventListener('resize', () => resize());
+
+// ═══════════════════════════════════════════════════════════════════════
+// Character — one rig with its own personality and its own state machine
+// ═══════════════════════════════════════════════════════════════════════
+class Character {
+    constructor(cfg, gltf, seed) {
+        this.key = cfg.key; this.name = cfg.name; this.color = cfg.color;
+
+        const model = gltf.scene;
+        RigCharacter.normalize(model, THREE, 2.2);
+
+        // Apply Flat "No Shadows" Shader (like the TV show)
+        model.traverse((c) => {
+            if (c.isMesh) {
+                const mats = Array.isArray(c.material) ? c.material : [c.material];
+                const allHaveTexture = mats.every(m => m.map);
+                const newMats = mats.map(m => {
+                    // MeshBasicMaterial ignores all lighting, resulting in flat 2D-like colors
+                    const tm = new THREE.MeshBasicMaterial({
+                        map: m.map, color: m.color, side: THREE.DoubleSide,
+                        transparent: false, depthWrite: true, alphaTest: 0
+                    });
+                    if (allHaveTexture) tm.vertexColors = false;
+                    return tm;
+                });
+                c.material = Array.isArray(c.material) ? newMats : newMats[0];
+            }
+        });
+
+        this.group = new THREE.Group();
+        this.group.add(model);
+        scene.add(this.group);
+        this.rig = new RigCharacter(model, THREE, { smoothing: 6 });
+        applyCalibration(gltf, this.rig);
+
+        // ── personality: nothing here is shared, so nobody moves in lockstep ──
+        this.tempo     = rand(0.82, 1.22);        // multiplies every clip's bpm
+        this.armAmp    = rand(0.72, 1.05);
+        this.lag       = rand(0.05, 0.85);        // reaction delay, seconds
+        this.zest      = rand(0.5, 1.0);          // jump / hop height, intensity
+        this.attention = rand(0.78, 0.97);        // chance of reacting at all
+        this.hold      = () => rand(7, 15);       // how long it keeps one dance
+        this.mirrorWave = Math.random() < 0.5;
+        this.phase     = seed * 1.7 + Math.random() * 4;
+
+        this.visible = true; this.show = 1;
+        this.x = 0; this.targetX = 0;
+        this.dance = null; this.danceLeft = 0;
+        this.reactLeft = 0; this.pending = null;
+        this.move = ''; this.reacting = false;
+
+        // Desync the clip clocks so identical dances never land on the same beat.
+        this.rig._t = this.phase;
+        this.startDance();
+    }
+
+    // Build clip options that layer this character's personality on top of
+    // whatever the GLB's baked calibration already specifies (never clobber it).
+    opts(clip) {
+        const cal = this.rig._cal?.clips?.[clip] ?? {};
+        const o = {};
+        if (BPM_CLIPS.has(clip)) o.bpm = Math.round((cal.bpm ?? 120) * this.tempo);
+        if (ARM_CLIPS.has(clip) && cal.armAmp === undefined) o.armAmp = this.armAmp;
+        if (clip === 'hop' || clip === 'celebrate') o.height = 0.55 + this.zest * 0.6;
+        if (clip === 'jump') o.height = 0.7 + this.zest * 0.5;
+        if (clip === 'excited' || clip === 'laugh') o.intensity = 0.7 + this.zest * 0.5;
+        if (clip === 'wave') o.side = this.waveSide ?? 'R';
+        return o;
+    }
+
+    play(clip) {
+        this.rig.play(clip, this.opts(clip));
+        // Start each character part-way into the cycle, so even the same clip
+        // at the same tempo would never land on the same beat.
+        this.rig._clipStart = this.rig._t - this.phase;
+        this.move = clip;
+        renderRoster();
+    }
+
+    // Pick a dance nobody else is currently doing.
+    startDance(exclude = []) {
+        const taken = new Set(exclude);
+        for (const c of crew) if (c !== this && c.visible && c.dance) taken.add(c.dance);
+        let choices = DANCES.filter(d => !taken.has(d) && d !== this.dance);
+        if (!choices.length) choices = DANCES.filter(d => d !== this.dance);
+        this.dance = pick(choices);
+        this.danceLeft = this.hold();
+        this.reacting = false;
+        this.play(this.dance);
+    }
+
+    // Queue a reaction; it fires after this character's own lag.
+    react(clip, dur) {
+        this.pending = { clip, t: this.lag * rand(0.6, 1.4), dur };
+    }
+
+    update(dt) {
+        if (this.pending) {
+            this.pending.t -= dt;
+            if (this.pending.t <= 0) {
+                this.reactLeft = this.pending.dur;
+                this.reacting = true;
+                this.play(this.pending.clip);
+                this.pending = null;
+            }
+        } else if (this.reactLeft > 0) {
+            this.reactLeft -= dt;
+            if (this.reactLeft <= 0) this.startDance();
+        } else {
+            this.danceLeft -= dt;
+            if (this.danceLeft <= 0) this.startDance();
+        }
+
+        this.rig.update(dt);
+
+        // layout / visibility easing
+        this.show += ((this.visible ? 1 : 0) - this.show) * (1 - Math.exp(-7 * dt));
+        this.x += (this.targetX - this.x) * (1 - Math.exp(-5 * dt));
+        this.group.position.x = this.x;
+        // Audio-reactive pulse, weighted by personality so nobody pulses alike.
+        const s = Math.max(0.0001, this.show);
+        const pulse = bass * (0.5 + this.zest);
+        this.group.scale.setScalar(s * (1 + pulse * 0.05));
+        this.group.position.y = (1 - this.show) * -0.6 + pulse * 0.05;
+        this.group.visible = this.show > 0.01;
+    }
+}
+
+const crew = [];
+
+// ═══════════════════════════════════════════════════════════════════════
+// layout + camera framing
+// ═══════════════════════════════════════════════════════════════════════
+let camGoal = new THREE.Vector3(0, 1.6, 9.5), camAnim = 0;
+let currentView = 'all';
+
+function frameCamera(instant = false) {
+    const n = crew.filter(c => c.visible).length || 1;
+    const halfW = ((n - 1) / 2) * SPACING + 1.15;
+    const vFov = camera.fov * Math.PI / 180;
+    const hHalf = Math.atan(Math.tan(vFov / 2) * camera.aspect);
+    const dist = Math.max(halfW / Math.tan(hHalf), 1.5 / Math.tan(vFov / 2)) * 1.08;
+    camGoal.set(0, 1.55, dist);
+    camAnim = instant ? 0 : 0.9;
+    if (instant) { camera.position.copy(camGoal); controls.target.set(0, 1.15, 0); controls.update(); }
+}
+
+function applyView(view) {
+    currentView = view;
+    const on = new Set(VIEWS[view]);
+    crew.forEach(c => { c.visible = on.has(c.key); });
+    const vis = crew.filter(c => c.visible);
+    vis.forEach((c, i) => { c.targetX = (i - (vis.length - 1) / 2) * SPACING; });
+    // Newly-hidden characters slide out sideways rather than through their neighbours.
+    crew.filter(c => !c.visible).forEach(c => { c.targetX = c.x >= 0 ? 6 : -6; });
+    vis.forEach(c => { if (!c.dance) c.startDance(); });
+    frameCamera();
+    document.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+    renderRoster();
+}
+document.querySelectorAll('.view-btn').forEach(b =>
+    b.addEventListener('click', () => applyView(b.dataset.view)));
+
+// user orbiting cancels the auto-framing tween
+renderer.domElement.addEventListener('pointerdown', () => { camAnim = 0; });
+
+// ═══════════════════════════════════════════════════════════════════════
+// roster panel
+// ═══════════════════════════════════════════════════════════════════════
+const rosterEl = document.getElementById('roster');
+function renderRoster() {
+    rosterEl.innerHTML = crew.map(c =>
+        `<div class="row${c.visible ? '' : ' off'}">
+           <span class="dot" style="background:${c.color}"></span>
+           <span class="nm">${c.name}</span>
+           <span class="mv${c.reacting ? ' react' : ''}">${c.move || '—'}</span>
+         </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// camera + MediaPipe pose
+// ═══════════════════════════════════════════════════════════════════════
+const video = document.getElementById('cam');
+const hudDot = document.getElementById('hudDot');
+const hudTxt = document.getElementById('hudTxt');
+const barFill = document.getElementById('barFill');
+let camReady = false, poseLandmarker = null, mpReady = false, latestPose = null, latestBlendshapes = null;
+
+function hud(text, on) { hudTxt.textContent = text; hudDot.classList.toggle('on', !!on); }
+
+async function startCamera() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false
+        });
+        video.srcObject = stream;
+        await video.play();
+        camReady = true;
+        return true;
+    } catch (e) {
+        console.warn('camera unavailable:', e);
+        hud('no camera — free dancing', false);
+        video.style.display = 'none';
+        return false;
+    }
+}
+
+async function initMediaPipe() {
+    document.getElementById('loadMsg').textContent = 'Loading MediaPipe Face Tracking…';
+    try {
+        const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs');
+        const { FaceLandmarker, FilesetResolver } = vision;
+        const files = await FilesetResolver.forVisionTasks(
+            'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm');
+        poseLandmarker = await FaceLandmarker.createFromOptions(files, {
+            baseOptions: {
+                modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+                delegate: 'GPU'
+            },
+            runningMode: 'VIDEO', numFaces: 1, outputFaceBlendshapes: true
+        });
+        mpReady = true;
+        hud('tracking face — smile, open mouth, or move', true);
+    } catch (e) {
+        console.error('MediaPipe init failed:', e);
+        hud('tracking failed — free dancing', false);
+    }
+}
+
+function detect() {
+    if (!camReady || !mpReady || !video.videoWidth) return;
+    try {
+        const result = poseLandmarker.detectForVideo(video, performance.now());
+        latestPose = result.faceLandmarks?.[0] ?? null;
+        latestBlendshapes = result.faceBlendshapes?.[0]?.categories ?? null;
+    } catch { /* dropped frame */ }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// gesture analysis — face tracking based
+// ═══════════════════════════════════════════════════════════════════════
+const TRACK_IDS = [1, 33, 263]; // nose, left eye, right eye for basic movement tracking
+let prevLm = null, energy = 0;
+let stableKind = null, stableFor = 0, emittedKind = null, sinceEmit = 99;
+let raisedSide = 'R';
+
+function analyze(dt) {
+    const p = latestPose;
+    const b = latestBlendshapes;
+    if (!p || !b) { prevLm = null; energy *= Math.exp(-2 * dt); return null; }
+
+    // Use face width (distance between eyes) as scale
+    const le = p[33], re = p[263];
+    if (!le || !re) { prevLm = null; return null; }
+    const sw = Math.max(0.02, Math.hypot(le.x - re.x, le.y - re.y));
+
+    if (prevLm && dt > 0) {
+        let sum = 0;
+        for (const i of TRACK_IDS) {
+            const a = p[i], prev = prevLm[i];
+            if (a && prev) sum += Math.hypot(a.x - prev.x, a.y - prev.y) / sw;
+        }
+        energy += (sum / TRACK_IDS.length / dt - energy) * 0.16;
+    }
+    prevLm = [];
+    for(let i=0; i<p.length; i++){ if(TRACK_IDS.includes(i)) prevLm[i] = {x: p[i].x, y: p[i].y}; }
+
+    // Parse blendshapes
+    let smile = 0;
+    let jawOpen = 0;
+    for (const shape of b) {
+        if (shape.categoryName === 'mouthSmileLeft' || shape.categoryName === 'mouthSmileRight') smile += shape.score;
+        if (shape.categoryName === 'jawOpen') jawOpen = shape.score;
+    }
+    smile /= 2.0;
+
+    if (smile > 0.5) return 'cheer';
+    if (jawOpen > 0.3) { raisedSide = Math.random() > 0.5 ? 'L' : 'R'; return 'wave'; }
+    if (energy > 2.0) return 'dance';
+    return null;
+}
+
+// Re-fire the same gesture periodically so the crew keeps reshuffling.
+const REPEAT = { wave: 4.0, cheer: 4.5, dance: 5.5 };
+const LABEL  = { wave: 'WAVE', cheer: 'YAY!', dance: 'DANCE' };
+
+function updateGestures(dt) {
+    const kind = analyze(dt);
+    sinceEmit += dt;
+
+    if (kind === stableKind) stableFor += dt;
+    else { stableKind = kind; stableFor = 0; }
+
+    if (!kind) {
+        if (stableFor > 0.8) emittedKind = null;
+        return;
+    }
+    const fresh = kind !== emittedKind && stableFor > 0.18;
+    const again = kind === emittedKind && sinceEmit > REPEAT[kind];
+    if (fresh || again) {
+        emittedKind = kind; sinceEmit = 0;
+        dispatch(kind);
+        if (fresh) flash(LABEL[kind]);
+    }
+}
+
+// Hand the gesture to the crew: distinct clip each, own delay, own tempo,
+// and a chance to simply keep doing its own thing.
+function dispatch(kind) {
+    const vis = crew.filter(c => c.visible);
+    if (!vis.length) return;
+    const pool = [...REACT[kind]].sort(() => Math.random() - 0.5);
+    const used = new Set();
+
+    // Each character decides for itself whether to look up — but somebody always does.
+    let responders = vis.filter(c => Math.random() < c.attention);
+    if (!responders.length) responders = [pick(vis)];
+
+    for (const c of responders) {
+        const clip = pool.find(x => !used.has(x)) ?? pick(REACT[kind]);
+        used.add(clip);
+        if (clip === 'wave') c.waveSide = c.mirrorWave ? raisedSide : (raisedSide === 'L' ? 'R' : 'L');
+        c.react(clip, rand(2.2, 4.0));
+    }
+}
+
+const gestureEl = document.getElementById('gesture');
+function flash(text) {
+    gestureEl.textContent = text;
+    gestureEl.classList.add('show');
+    clearTimeout(gestureEl._to);
+    gestureEl._to = setTimeout(() => gestureEl.classList.remove('show'), 1100);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// background: starfield, floating notes, and the occasional dancing bird
+// ═══════════════════════════════════════════════════════════════════════
+// Chunky five-pointed cartoon stars, drawn once to a canvas and reused as a
+// sprite texture so each one can be tinted, spun and pulsed on its own.
+function makeStarTexture(size = 160) {
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const g = c.getContext('2d');
+    const cx = size / 2, cy = size / 2, R = size * 0.44, r = R * 0.46;
+    g.beginPath();
+    for (let i = 0; i < 10; i++) {
+        const a = -Math.PI / 2 + i * Math.PI / 5;
+        const rad = i % 2 ? r : R;
+        const x = cx + Math.cos(a) * rad, y = cy + Math.sin(a) * rad;
+        i ? g.lineTo(x, y) : g.moveTo(x, y);
+    }
+    g.closePath();
+    g.shadowColor = 'rgba(255,255,255,0.9)';
+    g.shadowBlur = size * 0.10;
+    g.fillStyle = '#fff';
+    g.fill();
+    // second pass thickens the glow without washing out the points
+    g.shadowBlur = size * 0.05;
+    g.fill();
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+}
+
+const STAR_TEX = makeStarTexture();
+const STAR_COLORS = [0xffe066, 0xfff3b0, 0x8ad8ff, 0xff9ee0, 0xffffff, 0xa6ff9e];
+const stars = [];
+for (let i = 0; i < 46; i++) {
+    const mat = new THREE.SpriteMaterial({
+        map: STAR_TEX, color: pick(STAR_COLORS), transparent: true,
+        opacity: rand(0.35, 0.85), depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    const sp = new THREE.Sprite(mat);
+    sp.position.set(rand(-26, 26), rand(-3, 17), rand(-28, -6));   // behind the cast
+    const size = rand(0.55, 1.9);
+    sp.scale.setScalar(size);
+    mat.rotation = rand(0, Math.PI * 2);
+    scene.add(sp);
+    stars.push({ sp, mat, size, base: mat.opacity, phase: rand(0, Math.PI * 2), spin: rand(-0.35, 0.35) });
+}
+
+const notesEl = document.getElementById('notes');
+const GLYPHS = ['♪', '♫', '♬', '♩'];
+const NOTE_COLORS = ['#ffffff', '#7fd8ff', '#ff8ad8', '#ffd166', '#9cff9c'];
+let noteCool = 0;
+
+function updateBackground(dt, t) {
+    // Each star twinkles on its own phase and swells with the low end.
+    for (const s of stars) {
+        const tw = 0.86 + Math.sin(t * 1.5 + s.phase) * 0.14;
+        s.sp.scale.setScalar(s.size * tw * (1 + bass * 0.4));
+        s.mat.opacity = clamp(s.base * tw + bass * 0.3, 0, 1);
+        s.mat.rotation += s.spin * dt;
+    }
+
+    // Notes only while music is actually playing, and faster on loud passages.
+    if (audioEl.paused) return;
+    noteCool -= dt;
+    if (noteCool > 0) return;
+    noteCool = 0.30 - bass * 0.2;
+    const n = document.createElement('div');
+    n.className = 'note';
+    n.textContent = pick(GLYPHS);
+    n.style.left = `${rand(5, 95).toFixed(1)}%`;
+    n.style.top = `${rand(56, 80).toFixed(1)}%`;
+    n.style.fontSize = `${Math.round(rand(17, 34))}px`;
+    n.style.color = pick(NOTE_COLORS);
+    n.style.setProperty('--dur', `${rand(3.4, 5.8).toFixed(2)}s`);
+    n.style.setProperty('--spin', `${Math.round(rand(-45, 45))}deg`);
+    n.addEventListener('animationend', () => n.remove());
+    notesEl.appendChild(n);
+}
+
+// ── the bird: hops across at random, only when Bluey is on screen ──
+const birdEl = document.getElementById('bird');
+let birdWait = rand(12, 30), birdRun = null;
+
+function birdAllowed() { return currentView === 'all' || currentView === 'bluey'; }
+
+function updateBird(dt) {
+    if (!birdRun) {
+        if (!birdAllowed()) return;
+        birdWait -= dt;
+        if (birdWait <= 0) {
+            birdWait = rand(28, 70);
+            birdRun = {
+                t: 0, dur: rand(6.5, 9.5),
+                dir: Math.random() < 0.5 ? 1 : -1,
+                y0: innerHeight * rand(0.42, 0.72),
+                hops: Math.round(rand(5, 9)),
+                lift: rand(70, 130),
+            };
+            birdEl.style.display = 'block';
+        }
+        return;
+    }
+    birdRun.t += dt;
+    const p = birdRun.t / birdRun.dur;
+    if (p >= 1 || !birdAllowed()) { birdRun = null; birdEl.style.display = 'none'; return; }
+    const span = innerWidth + 300;
+    const x = birdRun.dir > 0 ? -150 + p * span : innerWidth + 150 - p * span;
+    const hop = Math.abs(Math.sin(p * Math.PI * birdRun.hops));
+    const y = birdRun.y0 - hop * birdRun.lift;
+    birdEl.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scaleX(${birdRun.dir})`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// music — tracks live in the sibling Music/ folder (shared with the other apps,
+// so they are not duplicated into this one)
+// ═══════════════════════════════════════════════════════════════════════
+const MUSIC_DIR = '../Music/';
+// Used when the host serves no directory index (a plain static host, say).
+// Drop new files into Music/ and they are picked up automatically on a server
+// that does list directories — like the python http.server this runs on.
+const FALLBACK_TRACKS = [
+    'Dance Mode - 1 Bluey Theme Tune [Dance Remix] (Vocal Reduction) - Bluey Soundtrack Alternative (128k).mp3',
+    'Bluey Dance Mode 04 The BeeeeeOOP Walk (Dialogue Removed) - Bluey Soundtrack Alternative (128k).mp3',
+    'Bluey Dance Mode 06 Copycat (Dialogue Removed) - Bluey Soundtrack Alternative (128k).mp3',
+    'One_Two_Jump_Higher.mp3',
+    'The_Floor_Is_Made_Of_Bubbles.mp3',
+];
+
+const audioEl = document.getElementById('audio');
+const musicEl = document.getElementById('music');
+const mTitle  = document.getElementById('mTitle');
+const mPlay   = document.getElementById('mPlay');
+const beatEl  = document.getElementById('beat');
+
+let tracks = [], trackIdx = 0;
+let audioCtx = null, analyser = null, freqData = null;
+let bass = 0, reshuffleIn = 16;
+
+function prettify(f) {
+    return f.replace(/\.[^.]+$/, '')
+            .replace(/\(128k\)|\(Dialogue Removed\)|\(Vocal Reduction\)/gi, '')
+            .replace(/-?\s*Bluey Soundtrack Alternative/gi, '')
+            .replace(/_/g, ' ').replace(/\s{2,}/g, ' ').replace(/[\s-]+$/, '').trim();
+}
+
+async function discoverTracks() {
+    try {
+        const res = await fetch(MUSIC_DIR);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+        const found = [...doc.querySelectorAll('a[href]')]
+            .map(a => a.getAttribute('href'))
+            .filter(h => /\.(mp3|m4a|ogg|wav)$/i.test(h))
+            .map(h => decodeURIComponent(h.replace(/^.*\//, '')));
+        if (found.length) return order(found);
+    } catch (e) {
+        console.warn('music: no directory index, falling back to built-in list —', e.message);
+    }
+    return FALLBACK_TRACKS;
+}
+
+// Directory order is alphabetical, which buries the dance tracks behind stray
+// voice clips. Known tracks lead, in the order listed above; anything new the
+// folder picks up follows, alphabetically.
+function order(found) {
+    const rank = f => { const i = FALLBACK_TRACKS.indexOf(f); return i < 0 ? FALLBACK_TRACKS.length : i; };
+    return found.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+}
+
+function loadTrack(i, autoplay) {
+    if (!tracks.length) return;
+    trackIdx = (i + tracks.length) % tracks.length;
+    audioEl.src = MUSIC_DIR + encodeURIComponent(tracks[trackIdx]);
+    mTitle.textContent = prettify(tracks[trackIdx]);
+    if (autoplay) play();
+}
+
+// The analyser graph can only be built after a user gesture, so it is created
+// lazily on the first play() rather than at load.
+function initGraph() {
+    if (audioCtx) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    audioCtx = new AC();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.75;
+    audioCtx.createMediaElementSource(audioEl).connect(analyser);
+    analyser.connect(audioCtx.destination);
+    freqData = new Uint8Array(analyser.frequencyBinCount);
+}
+
+async function play() {
+    initGraph();
+    if (audioCtx?.state === 'suspended') await audioCtx.resume();
+    try { await audioEl.play(); } catch (e) { console.warn('playback blocked:', e); }
+}
+
+// Low-end energy, smoothed — drives the per-character pulse.
+function sampleBass(dt) {
+    if (!analyser || audioEl.paused) { bass += (0 - bass) * (1 - Math.exp(-6 * dt)); return; }
+    analyser.getByteFrequencyData(freqData);
+    let s = 0;
+    for (let i = 1; i <= 6; i++) s += freqData[i];
+    bass += (s / (6 * 255) - bass) * (1 - Math.exp(-14 * dt));
+    beatEl.style.transform = `scaleY(${(0.3 + bass * 1.6).toFixed(3)})`;
+}
+
+mPlay.addEventListener('click', () => { audioEl.paused ? play() : audioEl.pause(); });
+document.getElementById('mNext').addEventListener('click', () => loadTrack(trackIdx + 1, true));
+document.getElementById('mPrev').addEventListener('click', () => loadTrack(trackIdx - 1, true));
+document.getElementById('mVol').addEventListener('input', e => { audioEl.volume = +e.target.value; });
+audioEl.addEventListener('ended', () => loadTrack(trackIdx + 1, true));
+audioEl.addEventListener('play',  () => { mPlay.innerHTML = '&#10073;&#10073;'; });
+audioEl.addEventListener('pause', () => { mPlay.innerHTML = '&#9654;'; });
+audioEl.addEventListener('error', () => { mTitle.textContent = `can't play: ${prettify(tracks[trackIdx] ?? '')}`; });
+
+// Browsers only allow playback after a user gesture on THIS page. Any click
+// counts, so unlock on the first interaction — otherwise a play command sent
+// from the phone would be silently rejected.
+addEventListener('pointerdown', () => {
+    initGraph();
+    if (audioCtx?.state === 'suspended') audioCtx.resume();
+}, { once: true });
+
+// ── stop the music when the room empties ──
+const IDLE_STOP = 60;          // seconds without a person before pausing
+let unseenFor = 0, autoPaused = false;
+
+function updateIdleMusic(dt) {
+    // Only meaningful when tracking actually works; with no camera there is
+    // never anybody to detect and the music would stop and never come back.
+    if (!camReady || !mpReady) return;
+    if (latestPose) {
+        unseenFor = 0;
+        if (autoPaused) { autoPaused = false; play(); hud('tracking — wave or dance', true); }
+        return;
+    }
+    unseenFor += dt;
+    if (!audioEl.paused && unseenFor > IDLE_STOP) {
+        audioEl.pause();
+        autoPaused = true;
+        hud('nobody here — music paused', true);
+    }
+}
+
+async function initMusic() {
+    tracks = await discoverTracks();
+    if (!tracks.length) return;
+    audioEl.volume = +document.getElementById('mVol').value;
+    loadTrack(0, false);
+    musicEl.classList.add('on');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// phone remote — see relay.js. Uses remote_server.py when it's there and a
+// public broker when it isn't, so this works from GitHub Pages too.
+// ═══════════════════════════════════════════════════════════════════════
+function applyCommand(c) {
+    switch (c.type) {
+        case 'view':
+            if (VIEWS[c.view]) applyView(c.view);
+            break;
+        case 'gesture':
+            if (REACT[c.kind]) { dispatch(c.kind); flash(LABEL[c.kind]); }
+            break;
+        case 'music':
+            if (c.action === 'toggle') audioEl.paused ? play() : audioEl.pause();
+            else if (c.action === 'next') loadTrack(trackIdx + 1, true);
+            else if (c.action === 'prev') loadTrack(trackIdx - 1, true);
+            autoPaused = false;      // an explicit request overrides the idle stop
+            unseenFor = 0;
+            break;
+        case 'volume': {
+            const v = clamp(+c.value, 0, 1);
+            if (!Number.isNaN(v)) { audioEl.volume = v; document.getElementById('mVol').value = v; }
+            break;
+        }
+    }
+}
+
+const remoteInfo = document.getElementById('remoteInfo');
+let channel = null;
+
+async function initRemote() {
+    try {
+        channel = await openChannel({
+            onCommand: applyCommand,
+            onStatus: ok => remoteInfo.classList.toggle('live', ok),
+        });
+        const pretty = channel.remoteUrl.replace(/^https?:\/\//, '');
+        remoteInfo.innerHTML = channel.mode === 'local'
+            ? `remote &nbsp;<b>${pretty}</b>`
+            : `remote &nbsp;<b>${pretty}</b><br>room code &nbsp;<b>${channel.room}</b>`;
+        remoteInfo.classList.add('on');
+    } catch (e) {
+        console.info('remote unavailable —', e.message);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// main loop
+// ═══════════════════════════════════════════════════════════════════════
+const clock = new THREE.Clock();
+function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.05);
+
+    resize();
+    detect();
+    updateGestures(dt);
+    sampleBass(dt);
+    updateIdleMusic(dt);
+    updateBackground(dt, clock.elapsedTime);
+    updateBird(dt);
+
+    // While music plays, reshuffle everyone's moves now and then so a long
+    // track doesn't settle into the same four dances.
+    if (!audioEl.paused) {
+        reshuffleIn -= dt;
+        if (reshuffleIn <= 0) { reshuffleIn = rand(12, 22); dispatch('dance'); }
+    }
+
+    for (const c of crew) c.update(dt);
+
+    if (camAnim > 0) {
+        camAnim -= dt;
+        const k = 1 - Math.exp(-4 * dt);
+        camera.position.lerp(camGoal, k);
+        controls.target.lerp(new THREE.Vector3(0, 1.15, 0), k);
+    }
+    controls.update();
+    barFill.style.width = `${clamp(energy / 2.4, 0, 1) * 100}%`;
+    renderer.render(scene, camera);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// boot
+// ═══════════════════════════════════════════════════════════════════════
+async function boot() {
+    const loader = new GLTFLoader();
+    const loadFill = document.getElementById('loadFill');
+    const msg = document.getElementById('loadMsg');
+    let done = 0;
+
+    const gltfs = await Promise.all(CAST.map(cfg =>
+        loader.loadAsync(MODEL_DIR + encodeURIComponent(cfg.file)).then(g => {
+            done++; loadFill.style.width = `${done / CAST.length * 100}%`;
+            msg.textContent = `${done} / ${CAST.length} characters`;
+            return g;
+        })
+    ));
+    try {
+        CAST.forEach((cfg, i) => crew.push(new Character(cfg, gltfs[i], i)));
+    } catch (e) {
+        msg.textContent = "Error: " + e.message;
+        console.error(e);
+        return;
+    }
+
+    resize();
+    applyView('all');
+    frameCamera(true);
+    animate();
+    document.getElementById('loading').style.display = 'none';
+
+    await initMusic();
+    await initRemote();
+
+    // Console hook — try the reactions without a webcam:
+    //   crewDemo.fire('wave' | 'cheer' | 'dance')
+    window.crewDemo = { crew, fire: (k) => { dispatch(k); flash(LABEL[k]); }, tracks: () => tracks };
+
+    hud('starting camera…', false);
+    if (await startCamera()) await initMediaPipe();
+}
+boot();
+</script>
+</body>
+</html>

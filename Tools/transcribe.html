@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Transcribe voice clips</title>
+<style>
+body{background:#0b0b10;color:#e6e9ef;font:13px/1.6 ui-monospace,Consolas,monospace;padding:20px;margin:0}
+h1{font-size:15px;margin:0 0 4px}
+p{color:#7f8794;margin:0 0 14px}
+#log{white-space:pre-wrap}
+.done{color:#46c46a}.err{color:#e5484d}
+</style>
+</head>
+<body>
+<h1>Transcribe voice clips</h1>
+<p>Runs Whisper in the browser (WASM) over every clip in Music/voice, so each
+file can be renamed after what is actually said. Result lands in
+<code>window.__result</code>.</p>
+<div id="log">loading…</div>
+
+<script type="module">
+import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2';
+
+env.allowLocalModels = false;
+
+const logEl = document.getElementById('log');
+const lines = [];
+const log = (s, cls = '') => {
+    lines.push(cls ? `<span class="${cls}">${s}</span>` : s);
+    logEl.innerHTML = lines.join('\n');
+};
+
+window.__done = false;
+window.__result = null;
+
+(async () => {
+    try {
+        log('fetching manifest…');
+        const manifest = await (await fetch('/Music/voice/manifest.json', { cache: 'no-store' })).json();
+        log(`${manifest.length} clips`);
+
+        log('loading whisper-base.en (~50MB, first run only)…');
+        const asr = await pipeline('automatic-speech-recognition', 'Xenova/whisper-base.en');
+        log('model ready', 'done');
+
+        // 16 kHz mono is what the model wants; decodeAudioData resamples for us.
+        const ac = new AudioContext({ sampleRate: 16000 });
+        const out = [];
+
+        for (let i = 0; i < manifest.length; i++) {
+            const entry = manifest[i];
+            const url = '/Music/voice/' + entry.file.split('/').slice(1).map(encodeURIComponent).join('/');
+            try {
+                const buf = await ac.decodeAudioData(await (await fetch(url)).arrayBuffer());
+                const res = await asr(buf.getChannelData(0));
+                const text = (res.text || '').trim();
+                out.push({ ...entry, text });
+                log(`${String(i + 1).padStart(2, '0')}/${manifest.length}  ${entry.character.padEnd(6)}  ${text}`);
+            } catch (e) {
+                out.push({ ...entry, text: '', error: String(e.message || e) });
+                log(`${String(i + 1).padStart(2, '0')}/${manifest.length}  FAILED  ${e.message}`, 'err');
+            }
+        }
+
+        window.__result = out;
+        window.__done = true;
+        log('\ndone — window.__result populated', 'done');
+    } catch (e) {
+        window.__done = true;
+        window.__error = String(e.message || e);
+        log('fatal: ' + e.message, 'err');
+    }
+})();
+</script>
+</body>
+</html>
